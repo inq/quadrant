@@ -1,12 +1,32 @@
 [package]
-name = "quadrant"
-version = "0.1.0"
-authors = ["inkyu <gofiri@gmail.com>"]
-edition = "2018"
+name = 'quadrant'
+version = '0.1.0'
+authors = ['inkyu <gofiri@gmail.com>']
+edition = '2018'
 
 [dependencies]
-actix-rt = "*"
-awc = { version = "2.0.0-alpha.2", features = ["rustls"] }
-tokio = { version = "*", features = ["io-util", "rt-core", "rt-util", "stream", "tcp"] }
-log = "*"
-env_logger = "*"
+actix-rt = '*'
+env_logger = '*'
+log = '*'
+rand = '*'
+serde_yaml = '*'
+serde_json = '*'
+rsa = '*'
+
+[dependencies.serde]
+version = '1.0'
+features = ['derive']
+
+[dependencies.awc]
+version = '2.0.0-alpha.2'
+features = ['rustls']
+
+[dependencies.tokio]
+version = '*'
+features = [
+    'io-util',
+    'rt-core',
+    'rt-util',
+    'stream',
+    'tcp',
+]
