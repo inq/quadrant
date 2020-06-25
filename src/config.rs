@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    device_id: String,
+    pub device_id: String,
     app_startup_country: String,
     capabilities: String,
     device_locale: String,
@@ -38,5 +38,5 @@ impl Config {
             .header("Accept-Encoding", "gzip, deflate")
             .header("X-FB-HTTP-Engine", "Liger")
             .header("Connection", "close")
-    }    
+    }
 }

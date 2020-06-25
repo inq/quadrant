@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate log;
 
+mod api;
 mod config;
 use config::Config;
 use std::env;
@@ -48,23 +49,14 @@ fn encrypt(password: &str) -> String {
 }
 
 async fn main_async() -> Result<(), Error> {
-    use awc::Client;
     use tokio::task::spawn_local;
 
     let reader = std::fs::File::open("config.yaml").map_err(Error::IoError)?;
     let config: Config = serde_yaml::from_reader(reader).map_err(Error::YamlParse)?;
 
-    let client = Client::default();
+    //let request = client.post("https://i.instagram.com/api/v1/accounts/login");
 
-    let request = client.post("https://i.instagram.com/api/v1/accounts/login");
-
-    let mut response = config.fillup_headers(request)
-        .send()
-        .await
-        .map_err(Error::SendRequest)?;
-
-    // let a: i32 = response.headers().get("")
-    println!("Response: {:?}", response);
+    api::qe::request(&config).await;
 
     /*
     let username = "gofiri";
@@ -76,8 +68,6 @@ async fn main_async() -> Result<(), Error> {
     });
     */
 
-    let body = response.body().await.map_err(Error::Payload)?;
-    println!("Downloaded: {:?} bytes", body.len());
     Ok(())
 }
 
