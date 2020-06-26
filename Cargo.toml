@@ -6,6 +6,8 @@ edition = '2018'
 
 [dependencies]
 actix-rt = '*'
+aes = '*'
+base64 = '*'
 env_logger = '*'
 http = '*'
 log = '*'

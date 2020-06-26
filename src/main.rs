@@ -4,8 +4,8 @@ extern crate log;
 mod api;
 mod config;
 use config::Config;
-use std::env;
 use serde_json::json;
+use std::env;
 
 #[derive(Debug)]
 enum Error {
@@ -13,15 +13,34 @@ enum Error {
     Payload(awc::error::PayloadError),
     YamlParse(serde_yaml::Error),
     IoError(std::io::Error),
+    Qe(api::qe::Error),
+    Rsa(rsa::errors::Error),
+
 }
 
-fn encrypt(password: &str) -> String {
+fn encrypt(password: &str, pub_key: rsa::pem::Pem, key_id: u8) -> Result<String, Error> {
+    use aes::block_cipher::NewBlockCipher;
+    use std::convert::TryFrom;
+    use rand::Rng;
+    use rsa::PublicKey;
+
     let mut rng = rand::thread_rng();
-    /*
-    let key = rng.gen::<u8, 32>();
-    let iv = rng.gen::<u8, 12>();
-    */
-    String::from("D")
+    let key: [u8; 32] = rng.gen();
+    let iv: [u8; 12] = rng.gen();
+
+    let pub_key = rsa::RSAPublicKey::try_from(pub_key).map_err(Error::Rsa)?;
+    let padding = rsa::PaddingScheme::new_pkcs1v15_encrypt();
+    let enc_data = pub_key.encrypt(&mut rng, padding, &password.as_bytes());
+    println!("{:?}", enc_data);
+
+    let enc = aes::Aes256::new(&aes::block_cipher::generic_array::GenericArray::clone_from_slice(&key));
+    let mut encrypted = vec![];
+    encrypted.push(1u8);
+    encrypted.push(key_id);
+    println!("{:?}", encrypted);
+    //let password_buffer = password
+
+    // info!("{:?}", enc_data);
     /*
     let rsa_encrypted = rsa::
     const rsaEncrypted = crypto.publicEncrypt({
@@ -46,6 +65,7 @@ fn encrypt(password: &str) -> String {
         .toString('base64'),
     };*/
 
+    Ok(String::from("11"))
 }
 
 async fn main_async() -> Result<(), Error> {
@@ -56,11 +76,11 @@ async fn main_async() -> Result<(), Error> {
 
     //let request = client.post("https://i.instagram.com/api/v1/accounts/login");
 
-    api::qe::request(&config).await;
-
-    /*
+    let qe_res = api::qe::request(&config).await.map_err(Error::Qe)?;
     let username = "gofiri";
     let password = "1234";
+    let encrypted = encrypt(password, qe_res.pub_key, qe_res.key_id)?;
+    /*
     let payload = json!({
         username: username,
         password: password,

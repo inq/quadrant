@@ -1,9 +1,16 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
+#[derive(Debug)]
 pub enum Error {
     SendRequest(awc::error::SendRequestError),
     JsonPayload(awc::error::JsonPayloadError),
+    MissingKey,
+    MissingKeyId,
     ToStr(http::header::ToStrError),
+    Base64Decode(base64::DecodeError),
+    Utf8(std::string::FromUtf8Error),
+    Pem(rsa::pem::PemError),
+    ParseInt(std::num::ParseIntError),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -12,7 +19,7 @@ struct Payload {
 }
 
 mod res {
-    use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Response {
@@ -36,11 +43,20 @@ mod res {
     }
 }
 
-pub async fn request(config: &crate::Config) -> Result<(), Error> {
+#[derive(Debug)]
+pub struct Response {
+    pub pub_key: rsa::pem::Pem,
+    pub key_id: u8,
+}
+
+pub async fn request(config: &crate::Config) -> Result<Response, Error> {
     use awc::Client;
 
     let payload = Payload {
-        signed_body: format!(r#"SIGNATURE.{{"id":"{}","server_config_retrieval":"1"}}"#, config.device_id),
+        signed_body: format!(
+            r#"SIGNATURE.{{"id":"{}","server_config_retrieval":"1"}}"#,
+            config.device_id
+        ),
     };
 
     let client = Client::default();
@@ -69,9 +85,18 @@ pub async fn request(config: &crate::Config) -> Result<(), Error> {
         .send_form(&payload).await
         .map_err(Error::SendRequest)?;
 
-    let enc_pub_key = response.headers().get("ig-set-password-encryption-pub-key").unwrap();
-    println!("{}", enc_pub_key.to_str().map_err(Error::ToStr)?);
     let _body: res::Response = response.json().await.map_err(Error::JsonPayload)?;
 
-    Ok(())
+    let pub_key_encoded = response
+            .headers()
+            .get("ig-set-password-encryption-pub-key")
+            .ok_or(Error::MissingKey)?
+            .to_str()
+            .map_err(Error::ToStr)?;
+    let pub_key = rsa::pem::parse(String::from_utf8(base64::decode(pub_key_encoded).map_err(Error::Base64Decode)?).map_err(Error::Utf8)?).map_err(Error::Pem)?;
+    let key_id = response.headers().get("ig-set-password-encryption-key-id").ok_or(Error::MissingKeyId)?.to_str().map_err(Error::ToStr)?.parse().map_err(Error::ParseInt)?;
+    Ok(Response {
+        pub_key: pub_key,
+        key_id,
+    })
 }
