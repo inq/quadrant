@@ -15,28 +15,31 @@ enum Error {
     IoError(std::io::Error),
     Qe(api::qe::Error),
     Rsa(rsa::errors::Error),
-
 }
 
 fn encrypt(password: &str, pub_key: rsa::pem::Pem, key_id: u8) -> Result<String, Error> {
-    use aes::block_cipher::NewBlockCipher;
     use std::convert::TryFrom;
     use rand::Rng;
     use rsa::PublicKey;
 
     let mut rng = rand::thread_rng();
-    let key: [u8; 32] = rng.gen();
+    let random_key: [u8; 32] = rng.gen();
     let iv: [u8; 12] = rng.gen();
 
-    let pub_key = rsa::RSAPublicKey::try_from(pub_key).map_err(Error::Rsa)?;
+    let public_key = rsa::RSAPublicKey::try_from(pub_key).map_err(Error::Rsa)?;
     let padding = rsa::PaddingScheme::new_pkcs1v15_encrypt();
-    let enc_data = pub_key.encrypt(&mut rng, padding, &password.as_bytes());
+    let enc_data = public_key.encrypt(&mut rng, padding, &random_key);
     println!("{:?}", enc_data);
 
-    let enc = aes::Aes256::new(&aes::block_cipher::generic_array::GenericArray::clone_from_slice(&key));
-    let mut encrypted = vec![];
-    encrypted.push(1u8);
-    encrypted.push(key_id);
+    use aes_gcm::aead::{Aead, NewAead, generic_array::GenericArray};
+    let cipher = aes_gcm::Aes256Gcm::new(&GenericArray::from_slice(&random_key));
+    let nonce: [u8; 12] = rng.gen();
+    let mut encrypted = cipher.encrypt(&GenericArray::from_slice(&nonce), password.as_ref());
+    println!("{:?}", encrypted);
+
+    let mut buf = vec![];
+    buf.push(1u8);
+    buf.push(key_id);
     println!("{:?}", encrypted);
     //let password_buffer = password
 
@@ -74,13 +77,14 @@ async fn main_async() -> Result<(), Error> {
     let reader = std::fs::File::open("config.yaml").map_err(Error::IoError)?;
     let config: Config = serde_yaml::from_reader(reader).map_err(Error::YamlParse)?;
 
-    //let request = client.post("https://i.instagram.com/api/v1/accounts/login");
-
-    let qe_res = api::qe::request(&config).await.map_err(Error::Qe)?;
+    // let qe_res = api::qe::request(&config).await.map_err(Error::Qe)?;
+    let qe_res = api::qe::request_dummy().await.map_err(Error::Qe)?;
     let username = "gofiri";
     let password = "1234";
     let encrypted = encrypt(password, qe_res.pub_key, qe_res.key_id)?;
     /*
+    //let request = client.post("https://i.instagram.com/api/v1/accounts/login");
+
     let payload = json!({
         username: username,
         password: password,

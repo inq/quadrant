@@ -51,6 +51,7 @@ pub struct Response {
 
 pub async fn request(config: &crate::Config) -> Result<Response, Error> {
     use awc::Client;
+    use std::time::Duration;
 
     let payload = Payload {
         signed_body: format!(
@@ -59,7 +60,9 @@ pub async fn request(config: &crate::Config) -> Result<Response, Error> {
         ),
     };
 
-    let client = Client::default();
+    let client = awc::ClientBuilder::new().connector(awc::Connector::new().timeout(Duration::from_secs(10)).finish()).finish();
+    // let client = Client::default();
+
     let mut response = client.post("https://i.instagram.com/api/v1/qe/sync/")
         .header("X-IG-App-ID", "124024574287414")
         .header("X-Bloks-Version-Id", "555f61dd0ded5ddf4201c89e12bb453bf605f9bc9d321a69f6e0f11ed9308664")
@@ -95,6 +98,18 @@ pub async fn request(config: &crate::Config) -> Result<Response, Error> {
             .map_err(Error::ToStr)?;
     let pub_key = rsa::pem::parse(String::from_utf8(base64::decode(pub_key_encoded).map_err(Error::Base64Decode)?).map_err(Error::Utf8)?).map_err(Error::Pem)?;
     let key_id = response.headers().get("ig-set-password-encryption-key-id").ok_or(Error::MissingKeyId)?.to_str().map_err(Error::ToStr)?.parse().map_err(Error::ParseInt)?;
+    Ok(Response {
+        pub_key: pub_key,
+        key_id,
+    })
+}
+
+pub async fn request_dummy() -> Result<Response, Error> {
+    let pub_key_encoded = "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUFyMDdKWFU1NS8wZjFTcDJDczFzcQpQWUZ4cS9KY2NwWUlKMTJuc3ZUbThNcnlNWDZZaDJjNUNNQTZIYTU1VGVGYldrbHpybjYzRDVxV3FHT1RvczlDCmRUSFlaN0VGYWtYSE9GbGQrTWw3dzFrK3FOTlFLNWNKc2tjQ0VKdjNzSjM4NkR4dk9sNmlVWXpIVmxyeFllY0MKZnFZUlh6WVBnMHhYMTU3SldOT0g0eWRUY1ZMV3NkRHByQ1l3Y0Q4RTVzR05kUTE1T1RkK2NmSWM2ZTRBd1d3bQp0LzhsbFk2eC9ZeUtVU1M5d05wV0E4K096VkhIMUFKTFErdFkwamMvLytCaXFoTUgyUThXOWdXanZuY2gzTGRDClo1ZnpZU2NBRkkvaUlsdnM1N3hQU2ZhUmp5djVUbHBKMVlRRUJldXBqQlJlTy9heXdMdDc4NXJHcitnQm8yeU4Kc1FJREFRQUIKLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg==";
+    let pub_key_id = "163";
+
+    let pub_key = rsa::pem::parse(String::from_utf8(base64::decode(pub_key_encoded).map_err(Error::Base64Decode)?).map_err(Error::Utf8)?).map_err(Error::Pem)?;
+    let key_id = pub_key_id.parse().map_err(Error::ParseInt)?;
     Ok(Response {
         pub_key: pub_key,
         key_id,
