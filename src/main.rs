@@ -6,6 +6,7 @@ mod config;
 use config::Config;
 use serde_json::json;
 use std::env;
+use ring::aead;
 
 #[derive(Debug)]
 enum Error {
@@ -17,30 +18,70 @@ enum Error {
     Rsa(rsa::errors::Error),
 }
 
+struct OneNonceSequence(Option<aead::Nonce>);
+
+impl OneNonceSequence {
+    /// Constructs the sequence allowing `advance()` to be called
+    /// `allowed_invocations` times.
+    fn new(nonce: aead::Nonce) -> Self {
+        Self(Some(nonce))
+    }
+}
+
+impl aead::NonceSequence for OneNonceSequence {
+    fn advance(&mut self) -> Result<aead::Nonce, ring::error::Unspecified> {
+        self.0.take().ok_or(ring::error::Unspecified)
+    }
+}
+
 fn encrypt(password: &str, pub_key: rsa::pem::Pem, key_id: u8) -> Result<String, Error> {
     use std::convert::TryFrom;
     use rand::Rng;
     use rsa::PublicKey;
 
     let mut rng = rand::thread_rng();
+    /*
     let random_key: [u8; 32] = rng.gen();
     let iv: [u8; 12] = rng.gen();
+    */
+
+    let random_key: [u8; 32] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+    let iv: [u8; 12] = [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
 
     let public_key = rsa::RSAPublicKey::try_from(pub_key).map_err(Error::Rsa)?;
     let padding = rsa::PaddingScheme::new_pkcs1v15_encrypt();
-    let enc_data = public_key.encrypt(&mut rng, padding, &random_key);
-    println!("{:?}", enc_data);
+    let mut rsa_encrypted = public_key.encrypt(&mut rng, padding, &random_key).unwrap();
 
-    use aes_gcm::aead::{Aead, NewAead, generic_array::GenericArray};
-    let cipher = aes_gcm::Aes256Gcm::new(&GenericArray::from_slice(&random_key));
-    let nonce: [u8; 12] = rng.gen();
-    let mut encrypted = cipher.encrypt(&GenericArray::from_slice(&nonce), password.as_ref());
-    println!("{:?}", encrypted);
+    use ring::aead::{AES_256_GCM, SealingKey, UnboundKey, Nonce, BoundKey, Aad};
+    let time = b"1593620844";
 
+    let _key = UnboundKey::new(&AES_256_GCM, &random_key).unwrap();
+    let nonce = Nonce::try_assume_unique_for_key(&iv).unwrap();
+    let nonce_sequence = OneNonceSequence::new(nonce);
+    let mut sealed_key = SealingKey::<OneNonceSequence>::new(_key, nonce_sequence);
+
+
+    let mut aes_encrypted = password.as_bytes().to_vec();
+    let res = sealed_key.seal_in_place_append_tag(Aad::from(time), &mut aes_encrypted);
+
+    //let cipher = aes_gcm::Aes256Gcm::new(&GenericArray::from_slice(&random_key));
+
+    // let nonce: [u8; 12] = rng.gen();
+    //let mut tag = cipher.encrypt_in_place_detached(&GenericArray::from_slice(&iv), &random_key, &mut aes_encrypted).unwrap().to_vec();
+    println!("{:x?}", aes_encrypted);
+    //println!("{:x?}", tag);
+    /*
     let mut buf = vec![];
     buf.push(1u8);
     buf.push(key_id);
-    println!("{:?}", encrypted);
+    // buf.append(&mut nonce.to_vec());
+    let size_buffer = (rsa_encrypted.len() as u16).to_le_bytes();
+    buf.append(&mut size_buffer.to_vec());
+    buf.append(&mut rsa_encrypted);
+    buf.append(&mut tag);
+    buf.append(&mut aes_encrypted);
+    */
+
     //let password_buffer = password
 
     // info!("{:?}", enc_data);
@@ -80,7 +121,7 @@ async fn main_async() -> Result<(), Error> {
     // let qe_res = api::qe::request(&config).await.map_err(Error::Qe)?;
     let qe_res = api::qe::request_dummy().await.map_err(Error::Qe)?;
     let username = "gofiri";
-    let password = "1234";
+    let password = "0000000000000";
     let encrypted = encrypt(password, qe_res.pub_key, qe_res.key_id)?;
     /*
     //let request = client.post("https://i.instagram.com/api/v1/accounts/login");

@@ -15,6 +15,7 @@ rand = '*'
 serde_yaml = '*'
 serde_json = '*'
 rsa = '*'
+ring = '*'
 
 [dependencies.serde]
 version = '1.0'
