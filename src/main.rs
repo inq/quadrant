@@ -40,35 +40,44 @@ fn encrypt(password: &str, pub_key: rsa::pem::Pem, key_id: u8) -> Result<String,
     use rsa::PublicKey;
 
     let mut rng = rand::thread_rng();
-    /*
     let random_key: [u8; 32] = rng.gen();
     let iv: [u8; 12] = rng.gen();
-    */
-
-    let random_key: [u8; 32] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
-    let iv: [u8; 12] = [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
 
     let public_key = rsa::RSAPublicKey::try_from(pub_key).map_err(Error::Rsa)?;
     let padding = rsa::PaddingScheme::new_pkcs1v15_encrypt();
     let mut rsa_encrypted = public_key.encrypt(&mut rng, padding, &random_key).unwrap();
 
+
     use ring::aead::{AES_256_GCM, SealingKey, UnboundKey, Nonce, BoundKey, Aad};
-    let time = b"1593620844";
+    let time = format!("{:?}", chrono::prelude::Utc::now().timestamp()).into_bytes();
 
     let _key = UnboundKey::new(&AES_256_GCM, &random_key).unwrap();
     let nonce = Nonce::try_assume_unique_for_key(&iv).unwrap();
     let nonce_sequence = OneNonceSequence::new(nonce);
     let mut sealed_key = SealingKey::<OneNonceSequence>::new(_key, nonce_sequence);
 
-
     let mut aes_encrypted = password.as_bytes().to_vec();
+    let len = aes_encrypted.len();
     let res = sealed_key.seal_in_place_append_tag(Aad::from(time), &mut aes_encrypted);
+    let (aes_encrypted, tag) = aes_encrypted.split_at(len);
+
+    let mut buf = vec![];
+    buf.push(1u8);
+    buf.push(key_id);
+    buf.extend_from_slice(&iv);
+    buf.extend_from_slice(&(rsa_encrypted.len() as u16).to_le_bytes());
+    buf.extend_from_slice(&rsa_encrypted);
+    buf.extend(tag);
+    buf.extend(aes_encrypted);
+    let encrypted = base64::encode(buf);
+    println!("{:?}", encrypted);
+
+    // println!("{:x?}", aes_encrypted);
 
     //let cipher = aes_gcm::Aes256Gcm::new(&GenericArray::from_slice(&random_key));
 
     // let nonce: [u8; 12] = rng.gen();
     //let mut tag = cipher.encrypt_in_place_detached(&GenericArray::from_slice(&iv), &random_key, &mut aes_encrypted).unwrap().to_vec();
-    println!("{:x?}", aes_encrypted);
     //println!("{:x?}", tag);
     /*
     let mut buf = vec![];
